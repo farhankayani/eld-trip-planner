@@ -5,16 +5,27 @@ interface Props {
   log: DailyLog;
 }
 
-const CANVAS_W = 960;
-const CANVAS_H = 500;
+// Canvas logical dimensions
+const W = 900;
+const H = 620;
 
-const LABEL_W = 130;
+// Header / info box area
+const INFO_Y = 0;
+const INFO_H = 110;
+
+// Grid area
+const LABEL_X = 0;
+const LABEL_W = 148;
 const GRID_X = LABEL_W;
-const GRID_W = CANVAS_W - LABEL_W - 20;
-const GRID_Y = 110;
-const ROW_H = 56;
+const GRID_RIGHT_MARGIN = 52; // space for "Total Hours" column
+const GRID_W = W - LABEL_W - GRID_RIGHT_MARGIN;
+const GRID_Y = INFO_H + 36; // room for hour labels above grid
+const ROW_H = 38;
 const GRID_H = ROW_H * 4;
 const HR_W = GRID_W / 24;
+
+// Remarks / recap below grid
+const REMARKS_Y = GRID_Y + GRID_H + 14;
 
 const STATUS_ROW: Record<DutyStatus, number> = {
   OFF: 0,
@@ -23,30 +34,12 @@ const STATUS_ROW: Record<DutyStatus, number> = {
   ON_DUTY: 3,
 };
 
-const STATUS_COLOR: Record<DutyStatus, string> = {
-  OFF: '#bfdbfe',
-  SLEEPER: '#ddd6fe',
-  DRIVING: '#bbf7d0',
-  ON_DUTY: '#fed7aa',
-};
-
-const STATUS_DARK: Record<DutyStatus, string> = {
-  OFF: '#1d4ed8',
-  SLEEPER: '#6d28d9',
-  DRIVING: '#15803d',
-  ON_DUTY: '#c2410c',
-};
-
-const ROW_LABELS = ['1. Off Duty', '2. Sleeper Berth', '3. Driving', '4. On Duty\n(Not Driving)'];
-
-function drawRoundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number,
-  r: number
-) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
+const ROW_LABELS = [
+  '1. Off Duty',
+  '2. Sleeper\n   Berth',
+  '3. Driving',
+  '4. On Duty\n   (Not Driving)',
+];
 
 export function ELDCanvas({ log }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,239 +50,371 @@ export function ELDCanvas({ log }: Props) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = CANVAS_W * dpr;
-    canvas.height = CANVAS_H * dpr;
-    canvas.style.width = `${CANVAS_W}px`;
-    canvas.style.height = `${CANVAS_H}px`;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = `${W}px`;
+    canvas.style.height = `${H}px`;
     ctx.scale(dpr, dpr);
 
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    // ── White background ──────────────────────────────────────────────
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
 
-    // === HEADER ===
-    ctx.fillStyle = '#1e3a5f';
-    ctx.fillRect(0, 0, CANVAS_W, 72);
+    // ── HEADER ROW ────────────────────────────────────────────────────
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 15px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.fillText("Driver's Daily Log", 16, 20);
+    // Title
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#000';
+    ctx.fillText("Driver's Daily Log", 8, 6);
 
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillStyle = '#93c5fd';
-    ctx.fillText('Property-carrying driver • 70hr/8-day cycle', 16, 38);
+    ctx.font = '9px Arial, sans-serif';
+    ctx.fillText('(24 hours)', 8, 22);
 
-    // Date
-    const dateStr = new Date(log.log_date + 'T12:00:00').toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`Day ${log.day_index + 1}  •  ${dateStr}`, CANVAS_W - 16, 20);
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillStyle = '#93c5fd';
-    ctx.fillText(`${log.miles_today.toFixed(0)} miles today`, CANVAS_W - 16, 38);
-    ctx.textAlign = 'left';
+    // Date line: ___ / ___ / ___   (month) (day) (year)
+    const dateObj = new Date(log.log_date + 'T12:00:00');
+    const month = String(dateObj.getMonth() + 1);
+    const day = String(dateObj.getDate());
+    const year = String(dateObj.getFullYear());
 
-    // Location bar
-    ctx.fillStyle = '#f0f7ff';
-    ctx.fillRect(0, 72, CANVAS_W, 32);
-    ctx.fillStyle = '#374151';
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`From: ${log.starting_location}`, 12, 88);
-    ctx.textAlign = 'right';
-    ctx.fillText(`To: ${log.ending_location}`, CANVAS_W - 12, 88);
-    ctx.textAlign = 'left';
+    ctx.font = '10px Arial, sans-serif';
+    ctx.fillText(`${month}   /   ${day}   /   ${year}`, 220, 6);
+    ctx.font = '8px Arial, sans-serif';
+    ctx.fillText('(month)', 218, 18);
+    ctx.fillText('(day)', 250, 18);
+    ctx.fillText('(year)', 278, 18);
 
-    // === HOUR LABELS (top of grid) ===
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '9px monospace';
-    ctx.textBaseline = 'bottom';
-    const hourLabels = ['M', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', 'N', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', 'M'];
-    for (let h = 0; h <= 24; h++) {
-      const x = GRID_X + h * HR_W;
-      const label = hourLabels[h];
-      const tw = ctx.measureText(label).width;
-      ctx.fillText(label, x - tw / 2, GRID_Y - 4);
-    }
+    // Original / Duplicate notice
+    ctx.font = '8px Arial, sans-serif';
+    ctx.fillText('Original - File at home terminal.', 530, 6);
+    ctx.fillText('Duplicate - Driver retains in his/her possession for 8 days.', 530, 16);
 
-    // AM/PM labels
-    ctx.font = '8px system-ui, sans-serif';
-    ctx.fillStyle = '#9ca3af';
+    // Horizontal line under title row
+    ctx.beginPath();
+    ctx.moveTo(0, 30);
+    ctx.lineTo(W, 30);
+    ctx.stroke();
+
+    // From / To
+    ctx.font = 'bold 9px Arial, sans-serif';
+    ctx.fillText('From:', 8, 34);
+    ctx.fillText('To:', 460, 34);
+
+    ctx.font = '10px Arial, sans-serif';
+    ctx.fillText(log.starting_location || '', 40, 34);
+    ctx.fillText(log.ending_location || '', 476, 34);
+
+    ctx.beginPath(); ctx.moveTo(0, 48); ctx.lineTo(W, 48); ctx.stroke();
+
+    // Info boxes row 1: Total Miles Driving Today | Total Mileage Today | Name of Carrier
+    const boxY1 = 50;
+    const boxH = 22;
+
+    // box borders
+    ctx.strokeRect(6, boxY1, 100, boxH);
+    ctx.strokeRect(112, boxY1, 100, boxH);
+    ctx.strokeRect(240, boxY1, W - 246, boxH);
+
+    ctx.font = '7.5px Arial, sans-serif';
+    ctx.fillText('Total Miles Driving Today', 8, boxY1 + 2);
+    ctx.fillText('Total Mileage Today', 114, boxY1 + 2);
+    ctx.fillText('Name of Carrier or Carriers', 242, boxY1 + 2);
+
+    ctx.font = 'bold 11px Arial, sans-serif';
+    ctx.fillText(String(Math.round(log.miles_today)), 40, boxY1 + 11);
+
+    ctx.beginPath(); ctx.moveTo(0, boxY1 + boxH + 2); ctx.lineTo(W, boxY1 + boxH + 2); ctx.stroke();
+
+    // Info boxes row 2: Truck/Tractor | License Plates | Main Office | Home Terminal
+    const boxY2 = 76;
+    ctx.strokeRect(6, boxY2, 210, boxH);
+    ctx.strokeRect(222, boxY2, 190, boxH);
+    ctx.strokeRect(418, boxY2, W - 424, boxH);
+
+    ctx.font = '7.5px Arial, sans-serif';
+    ctx.fillText('Truck/Tractor and Trailer Numbers or', 8, boxY2 + 2);
+    ctx.fillText("License Plate(s)/State (show each unit)", 8, boxY2 + 10);
+    ctx.fillText('Main Office Address', 224, boxY2 + 2);
+    ctx.fillText('Home Terminal Address', 420, boxY2 + 2);
+
+    ctx.beginPath(); ctx.moveTo(0, boxY2 + boxH + 2); ctx.lineTo(W, boxY2 + boxH + 2); ctx.stroke();
+
+    // ── HOUR LABELS ABOVE GRID ─────────────────────────────────────────
+    const labelRowY = GRID_Y - 20;
+
+    // "Mid-night" at start, "Noon" at 12, "Mid-night" at end
+    ctx.font = 'bold 7px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Mid', GRID_X, GRID_Y - 14);
-    ctx.fillText('night', GRID_X, GRID_Y - 6);
-    ctx.fillText('Noon', GRID_X + 12 * HR_W, GRID_Y - 10);
-    ctx.fillText('Mid', GRID_X + 24 * HR_W, GRID_Y - 14);
-    ctx.fillText('night', GRID_X + 24 * HR_W, GRID_Y - 6);
+    ctx.fillText('Mid-', GRID_X, labelRowY - 8);
+    ctx.fillText('night', GRID_X, labelRowY - 1);
+    ctx.fillText('Noon', GRID_X + 12 * HR_W, labelRowY - 4);
+    ctx.fillText('Mid-', GRID_X + 24 * HR_W, labelRowY - 8);
+    ctx.fillText('night', GRID_X + 24 * HR_W, labelRowY - 1);
+
+    // Hour numbers 1-11 AM, 1-11 PM
+    ctx.font = '8px Arial, sans-serif';
+    const hourNums = ['', '1','2','3','4','5','6','7','8','9','10','11','','1','2','3','4','5','6','7','8','9','10','11',''];
+    for (let h = 0; h < 25; h++) {
+      const x = GRID_X + h * HR_W;
+      if (hourNums[h]) ctx.fillText(hourNums[h], x, labelRowY);
+    }
+
+    // "Total Hours" header
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 7.5px Arial, sans-serif';
+    ctx.fillText('Total', GRID_X + GRID_W + GRID_RIGHT_MARGIN / 2, GRID_Y - 12);
+    ctx.fillText('Hours', GRID_X + GRID_W + GRID_RIGHT_MARGIN / 2, GRID_Y - 4);
+
     ctx.textAlign = 'left';
 
-    // === GRID BACKGROUND ===
-    // Alternate row shading
-    for (let row = 0; row < 4; row++) {
-      const y = GRID_Y + row * ROW_H;
-      ctx.fillStyle = row % 2 === 0 ? '#f9fafb' : '#ffffff';
-      ctx.fillRect(GRID_X, y, GRID_W, ROW_H);
-    }
+    // ── GRID ───────────────────────────────────────────────────────────
 
-    // === ROW LABELS ===
-    const labelColors: Record<DutyStatus, string> = {
-      OFF: '#1d4ed8', SLEEPER: '#6d28d9', DRIVING: '#15803d', ON_DUTY: '#c2410c',
-    };
-    const statuses: DutyStatus[] = ['OFF', 'SLEEPER', 'DRIVING', 'ON_DUTY'];
+    // Row backgrounds (white)
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(GRID_X, GRID_Y, GRID_W, GRID_H);
 
-    for (let row = 0; row < 4; row++) {
-      const y = GRID_Y + row * ROW_H;
-      ctx.fillStyle = STATUS_COLOR[statuses[row]];
-      ctx.fillRect(0, y, LABEL_W - 4, ROW_H);
-
-      ctx.fillStyle = labelColors[statuses[row]];
-      ctx.font = 'bold 10px system-ui, sans-serif';
-      ctx.textBaseline = 'top';
-      const lines = ROW_LABELS[row].split('\n');
-      const startY = y + (ROW_H - lines.length * 13) / 2;
-      lines.forEach((line, li) => {
-        ctx.fillText(line, 6, startY + li * 13);
-      });
-    }
-
-    // === VERTICAL HOUR LINES ===
+    // Vertical hour lines with tick subdivisions
     for (let h = 0; h <= 24; h++) {
       const x = GRID_X + h * HR_W;
-      ctx.strokeStyle = h % 6 === 0 ? '#9ca3af' : h % 2 === 0 ? '#e5e7eb' : '#f3f4f6';
-      ctx.lineWidth = h % 6 === 0 ? 1.2 : 0.5;
+      const isMajor = h % 6 === 0;
+      const isHour = true;
+
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = isMajor ? 1.2 : 0.5;
       ctx.beginPath();
       ctx.moveTo(x, GRID_Y);
       ctx.lineTo(x, GRID_Y + GRID_H);
       ctx.stroke();
+
+      // Sub-tick marks (15-min intervals) — small ticks at top & bottom of each row
+      if (isHour && h < 24) {
+        for (let q = 1; q <= 3; q++) {
+          const qx = x + (q / 4) * HR_W;
+          ctx.lineWidth = 0.4;
+          ctx.strokeStyle = '#555';
+          for (let row = 0; row < 4; row++) {
+            const ry = GRID_Y + row * ROW_H;
+            const tickH = q === 2 ? 10 : 6; // half-hour tick taller
+            // top tick
+            ctx.beginPath(); ctx.moveTo(qx, ry); ctx.lineTo(qx, ry + tickH); ctx.stroke();
+            // bottom tick
+            ctx.beginPath(); ctx.moveTo(qx, ry + ROW_H); ctx.lineTo(qx, ry + ROW_H - tickH); ctx.stroke();
+          }
+        }
+      }
     }
 
-    // === STATUS BARS ===
+    // Horizontal row dividers
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.8;
+    for (let row = 0; row <= 4; row++) {
+      const y = GRID_Y + row * ROW_H;
+      ctx.beginPath();
+      ctx.moveTo(GRID_X, y);
+      ctx.lineTo(GRID_X + GRID_W, y);
+      ctx.stroke();
+    }
+
+    // ── ROW LABELS (left side) ─────────────────────────────────────────
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.8;
+    // outer border for label area
+    ctx.strokeRect(LABEL_X, GRID_Y, LABEL_W, GRID_H);
+
+    ctx.font = '9px Arial, sans-serif';
+    ctx.fillStyle = '#000';
+    ctx.textBaseline = 'middle';
+    for (let row = 0; row < 4; row++) {
+      const cy = GRID_Y + row * ROW_H + ROW_H / 2;
+      const lines = ROW_LABELS[row].split('\n');
+      if (lines.length === 1) {
+        ctx.fillText(lines[0], LABEL_X + 4, cy);
+      } else {
+        ctx.fillText(lines[0], LABEL_X + 4, cy - 6);
+        ctx.fillText(lines[1], LABEL_X + 4, cy + 6);
+      }
+      // row divider in label area
+      if (row > 0) {
+        ctx.beginPath();
+        ctx.moveTo(LABEL_X, GRID_Y + row * ROW_H);
+        ctx.lineTo(LABEL_X + LABEL_W, GRID_Y + row * ROW_H);
+        ctx.stroke();
+      }
+    }
+
+    // ── TOTAL HOURS column (right of grid) ────────────────────────────
+    const totalsX = GRID_X + GRID_W;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(totalsX, GRID_Y, GRID_RIGHT_MARGIN, GRID_H);
+    for (let row = 1; row < 4; row++) {
+      ctx.beginPath();
+      ctx.moveTo(totalsX, GRID_Y + row * ROW_H);
+      ctx.lineTo(totalsX + GRID_RIGHT_MARGIN, GRID_Y + row * ROW_H);
+      ctx.stroke();
+    }
+
+    const totalsHours = [
+      log.off_duty_hours,
+      log.sleeper_hours,
+      log.driving_hours,
+      log.on_duty_not_driving_hours,
+    ];
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.fillStyle = '#000';
+    for (let row = 0; row < 4; row++) {
+      ctx.fillText(
+        totalsHours[row].toFixed(2),
+        totalsX + GRID_RIGHT_MARGIN / 2,
+        GRID_Y + row * ROW_H + ROW_H / 2,
+      );
+    }
+    ctx.textAlign = 'left';
+
+    // ── STATUS BARS (solid black line through vertical center of row) ──
+    // Matches real ELD form: a horizontal line drawn through the midpoint
+    ctx.strokeStyle = '#000';
     for (const entry of log.timeline_entries) {
       const row = STATUS_ROW[entry.status as DutyStatus];
       const x1 = GRID_X + entry.start_hour * HR_W;
       const x2 = GRID_X + entry.end_hour * HR_W;
-      const y = GRID_Y + row * ROW_H;
-      const barW = Math.max(x2 - x1, 1);
-      const barPad = 4;
+      const midY = GRID_Y + row * ROW_H + ROW_H / 2;
 
-      // Filled bar
-      ctx.fillStyle = STATUS_COLOR[entry.status as DutyStatus];
-      ctx.fillRect(x1, y + barPad, barW, ROW_H - barPad * 2);
-
-      // Bar border
-      ctx.strokeStyle = STATUS_DARK[entry.status as DutyStatus];
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(x1, y + barPad, barW, ROW_H - barPad * 2);
-
-      // Tick lines at entry/exit through full row height
-      ctx.strokeStyle = STATUS_DARK[entry.status as DutyStatus];
-      ctx.lineWidth = 1.5;
+      // Horizontal status line
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(x1, y);
-      ctx.lineTo(x1, y + ROW_H);
+      ctx.moveTo(x1, midY);
+      ctx.lineTo(x2, midY);
       ctx.stroke();
+
+      // Vertical connectors at transitions (drop lines to next row or edge)
+      ctx.lineWidth = 1.5;
+      // left vertical line from top to bottom of row at start
       ctx.beginPath();
-      ctx.moveTo(x2, y);
-      ctx.lineTo(x2, y + ROW_H);
+      ctx.moveTo(x1, GRID_Y + row * ROW_H);
+      ctx.lineTo(x1, GRID_Y + row * ROW_H + ROW_H);
+      ctx.stroke();
+      // right vertical line
+      ctx.beginPath();
+      ctx.moveTo(x2, GRID_Y + row * ROW_H);
+      ctx.lineTo(x2, GRID_Y + row * ROW_H + ROW_H);
       ctx.stroke();
     }
 
-    // === GRID BORDER ===
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(GRID_X, GRID_Y, GRID_W, GRID_H);
-
-    // Horizontal row dividers
-    for (let row = 1; row < 4; row++) {
-      ctx.strokeStyle = '#d1d5db';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(GRID_X, GRID_Y + row * ROW_H);
-      ctx.lineTo(GRID_X + GRID_W, GRID_Y + row * ROW_H);
-      ctx.stroke();
-    }
-
-    // Label area left border
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(GRID_X, GRID_Y);
-    ctx.lineTo(GRID_X, GRID_Y + GRID_H);
-    ctx.stroke();
-
-    // === TOTALS SECTION ===
-    const totalsY = GRID_Y + GRID_H + 14;
-    const totals = [
-      { label: 'Off Duty', hours: log.off_duty_hours, status: 'OFF' as DutyStatus },
-      { label: 'Sleeper Berth', hours: log.sleeper_hours, status: 'SLEEPER' as DutyStatus },
-      { label: 'Driving', hours: log.driving_hours, status: 'DRIVING' as DutyStatus },
-      { label: 'On Duty (Not Driving)', hours: log.on_duty_not_driving_hours, status: 'ON_DUTY' as DutyStatus },
-    ];
-    const totalColW = (CANVAS_W - 20) / 4;
-
-    totals.forEach(({ label, hours, status }, i) => {
-      const x = 10 + i * totalColW;
-      ctx.fillStyle = STATUS_COLOR[status];
-      drawRoundRect(ctx, x, totalsY, totalColW - 8, 42, 6);
-      ctx.fill();
-
-      ctx.fillStyle = STATUS_DARK[status];
-      ctx.font = 'bold 9px system-ui, sans-serif';
-      ctx.textBaseline = 'top';
-      ctx.fillText(label.toUpperCase(), x + 8, totalsY + 6);
-
-      ctx.font = 'bold 16px system-ui, sans-serif';
-      ctx.fillText(`${hours.toFixed(2)}h`, x + 8, totalsY + 18);
-    });
-
-    // Total check
-    const grandTotal = log.off_duty_hours + log.sleeper_hours + log.driving_hours + log.on_duty_not_driving_hours;
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`Total: ${grandTotal.toFixed(2)} hrs`, CANVAS_W - 10, totalsY + 46);
-    ctx.textAlign = 'left';
-
-    // === REMARKS ===
-    const remarksY = totalsY + 60;
-    ctx.fillStyle = '#1e3a5f';
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.fillText('REMARKS:', 10, remarksY);
-
-    ctx.fillStyle = '#374151';
-    ctx.font = '10px system-ui, sans-serif';
-
-    // Collect notable events
-    const remarks: string[] = [];
-    for (const entry of log.timeline_entries) {
-      if (entry.notes) {
-        const time = `${Math.floor(entry.start_hour).toString().padStart(2, '0')}:${String(Math.round((entry.start_hour % 1) * 60)).padStart(2, '0')}`;
-        remarks.push(`${time} — ${entry.notes}${entry.location ? ` at ${entry.location}` : ''}`);
+    // Draw transition connectors between consecutive entries
+    const sorted = [...log.timeline_entries].sort((a, b) => a.start_hour - b.start_hour);
+    for (let i = 0; i + 1 < sorted.length; i++) {
+      const cur = sorted[i];
+      const nxt = sorted[i + 1];
+      if (Math.abs(cur.end_hour - nxt.start_hour) < 0.01) {
+        const rowA = STATUS_ROW[cur.status as DutyStatus];
+        const rowB = STATUS_ROW[nxt.status as DutyStatus];
+        if (rowA !== rowB) {
+          const x = GRID_X + cur.end_hour * HR_W;
+          const y1 = GRID_Y + rowA * ROW_H + ROW_H / 2;
+          const y2 = GRID_Y + rowB * ROW_H + ROW_H / 2;
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#000';
+          ctx.beginPath();
+          ctx.moveTo(x, y1);
+          ctx.lineTo(x, y2);
+          ctx.stroke();
+        }
       }
     }
-    if (remarks.length === 0) {
-      remarks.push(`Driving from ${log.starting_location} to ${log.ending_location}`);
-    }
 
-    remarks.slice(0, 4).forEach((r, i) => {
-      ctx.fillText(r, 80, remarksY + i * 14);
+    // ── OUTER GRID BORDER ──────────────────────────────────────────────
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(LABEL_X, GRID_Y, LABEL_W + GRID_W + GRID_RIGHT_MARGIN, GRID_H);
+
+    // ── REMARKS SECTION ────────────────────────────────────────────────
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 9px Arial, sans-serif';
+    ctx.fillStyle = '#000';
+    ctx.fillText('Remarks', 8, REMARKS_Y);
+
+    // Remarks lines box
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(0, REMARKS_Y + 12, W, 40);
+
+    ctx.font = '8.5px Arial, sans-serif';
+    const remarkLines: string[] = [];
+    for (const entry of log.timeline_entries) {
+      if (entry.notes) {
+        const hh = Math.floor(entry.start_hour);
+        const mm = Math.round((entry.start_hour % 1) * 60);
+        remarkLines.push(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')} — ${entry.notes}${entry.location ? ` at ${entry.location}` : ''}`);
+      }
+    }
+    if (remarkLines.length === 0) {
+      remarkLines.push(`Driving from ${log.starting_location} to ${log.ending_location}`);
+    }
+    remarkLines.slice(0, 3).forEach((r, i) => {
+      ctx.fillText(r, 6, REMARKS_Y + 15 + i * 13);
     });
 
-    // Bottom border
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, CANVAS_H - 1);
-    ctx.lineTo(CANVAS_W, CANVAS_H - 1);
-    ctx.stroke();
+    // "Enter name of place..." instruction
+    ctx.font = 'italic 8px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enter name of place you reported and where released from work and when and where each change of duty occurred.', W / 2, REMARKS_Y + 56);
+    ctx.fillText('Use time standard of home terminal.', W / 2, REMARKS_Y + 66);
+    ctx.textAlign = 'left';
+
+    // ── RECAP SECTION ──────────────────────────────────────────────────
+    const recapY = REMARKS_Y + 80;
+    ctx.font = 'bold 8.5px Arial, sans-serif';
+    ctx.fillText('Recap:', 4, recapY);
+    ctx.font = '7.5px Arial, sans-serif';
+    ctx.fillText('Complete at', 4, recapY + 10);
+    ctx.fillText('end of day', 4, recapY + 19);
+
+    // 70-hour box
+    const box70X = 60;
+    ctx.strokeRect(box70X, recapY, 200, 72);
+    ctx.font = 'bold 8px Arial, sans-serif';
+    ctx.fillText('70 Hour/', box70X + 4, recapY + 2);
+    ctx.fillText('8 Day', box70X + 4, recapY + 11);
+    ctx.fillText('Drivers', box70X + 4, recapY + 20);
+
+    // columns A, B, C inside 70hr box
+    const colW70 = 52;
+    ['A.', 'B.', 'C.'].forEach((lbl, i) => {
+      const cx = box70X + 56 + i * colW70;
+      ctx.beginPath(); ctx.moveTo(cx, recapY); ctx.lineTo(cx, recapY + 72); ctx.stroke();
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText(lbl, cx + 4, recapY + 2);
+    });
+
+    const recapRows = [
+      'A. Total hours on duty today.',
+      'B. Total hours on duty available tomorrow (70 hr. minus A).',
+      'C. Total hours on duty last 7 days including today.',
+    ];
+    ctx.font = '7px Arial, sans-serif';
+    const totalOnDuty = log.driving_hours + log.on_duty_not_driving_hours;
+    const recapVals70 = [
+      totalOnDuty.toFixed(2),
+      Math.max(0, 70 - totalOnDuty).toFixed(2),
+      '—',
+    ];
+    recapRows.forEach((_, i) => {
+      const cx = box70X + 56 + i * colW70;
+      ctx.fillText(recapVals70[i], cx + 4, recapY + 50);
+    });
+
+    ctx.font = '7px Arial, sans-serif';
+    ctx.fillText('On duty\nhours on\ntoday.\nTotal lines\n3 & 4'.replace(/\n/g, ' | '), box70X + 4, recapY + 35);
+
+    // Asterisk note
+    ctx.font = 'italic 7px Arial, sans-serif';
+    ctx.fillText('*If you took 34 consecutive hours off duty you have 60/70 hours available', W - 200, recapY + 2);
 
   }, [log]);
 
@@ -303,17 +428,17 @@ export function ELDCanvas({ log }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
-      <canvas ref={canvasRef} className="w-full" />
-      <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+    <div className="bg-white rounded border border-gray-300 overflow-hidden shadow">
+      <canvas ref={canvasRef} style={{ width: W, height: H, display: 'block' }} />
+      <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
         <span className="text-xs text-gray-500">
-          Day {log.day_index + 1} • {log.log_date} • {log.miles_today.toFixed(0)} miles
+          Day {log.day_index + 1} &nbsp;•&nbsp; {log.log_date} &nbsp;•&nbsp; {Math.round(log.miles_today)} miles
         </span>
         <button
           onClick={handleDownload}
-          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition-colors"
+          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
         >
-          ⬇️ Download PNG
+          Download PNG
         </button>
       </div>
     </div>
