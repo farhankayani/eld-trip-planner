@@ -10,7 +10,6 @@ const W = 900;
 const H = 620;
 
 // Header / info box area
-const INFO_Y = 0;
 const INFO_H = 110;
 
 // Grid area
