@@ -348,49 +348,56 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
   ctx.textAlign = 'left';
 
   // ── RECAP SECTION ─────────────────────────────────────────────────────
-  const recapY = REMARKS_Y + 90;
+  //
+  // Layout (matches paper ELD form):
+  //
+  //  "Recap:"       ┌─────────────────┬──────────┬──────────┬──────────┐
+  //  "Complete at"  │ 70 Hour /       │    A.    │    B.    │    C.    │  ← col-letter row (16px)
+  //  "end of day"   │ 8 Day Drivers   ├──────────┼──────────┼──────────┤
+  //                 │                 │ desc...  │ desc...  │ desc...  │  ← description row (34px)
+  //                 │                 ├──────────┼──────────┼──────────┤
+  //                 │                 │  value   │  value   │  value   │  ← value row (22px)
+  //                 └─────────────────┴──────────┴──────────┴──────────┘
+  //
+  //  titleColW = 110px   dataColW = 80px × 3   total = 350px
 
-  // "Recap:" label + instruction, left of the box
-  ctx.font = 'bold 9px Arial, sans-serif';
+  const recapY    = REMARKS_Y + 90;
+  const titleColW = 110;   // left column: "70 Hour / 8 Day Drivers"
+  const dataColW  = 80;    // each A / B / C column
+  const r_bW      = titleColW + dataColW * 3;
+  const letterH   = 16;    // row for A. B. C. letters
+  const r_descH   = 36;    // description text row
+  const r_valH    = 24;    // value row
+  const r_bH      = letterH + r_descH + r_valH;
+  const r_bx      = 72;    // box left edge (after "Recap:" label)
+
+  // "Recap:" side label
   ctx.fillStyle = '#000';
   ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 9px Arial, sans-serif';
   ctx.fillText('Recap:', 4, recapY);
   ctx.font = '7px Arial, sans-serif';
   ctx.fillText('Complete at', 4, recapY + 13);
   ctx.fillText('end of day', 4, recapY + 22);
 
-  // ── 70-Hour box layout ──────────────────────────────────────────────
-  // Structure:
-  //  [  left label col (80px)  |  col A (80px)  |  col B (80px)  |  col C (80px)  ]
-  //  Row 0 (header, 18px):  "70 Hour / 8 Day"  |  "A."  |  "B."  |  "C."
-  //  Row 1 (desc, 30px):    description text inside left label col spans — descriptions under each letter
-  //  Row 2 (value, 22px):   blank             |  value |  value |  value
+  // Outer box
+  rect(ctx, r_bx, recapY, r_bW, r_bH, 1);
 
-  const bx      = 72;   // box left edge
-  const cW      = 80;   // each of the 3 data columns
-  const bW      = cW * 3;  // total box width = 240
-  const hdrH    = 18;   // header row height
-  const descH   = 36;   // description row height
-  const valH    = 22;   // value row height
-  const recap70H = hdrH + descH + valH;
+  // Title column: left vertical separator
+  vLine(ctx, r_bx + titleColW, recapY, recapY + r_bH, 0.8);
 
-  rect(ctx, bx, recapY, bW, recap70H, 1);
-
-  // Header row background tint
-  ctx.fillStyle = '#f0f0f0';
-  ctx.fillRect(bx + 1, recapY + 1, bW - 2, hdrH - 1);
-  ctx.fillStyle = '#000';
-
-  // Header divider
-  hLine(ctx, bx, bx + bW, recapY + hdrH, 0.8);
-
-  // Description / value row divider
-  hLine(ctx, bx, bx + bW, recapY + hdrH + descH, 0.8);
-
-  // Header title (left portion, before first column divider)
+  // Title text ("70 Hour / 8 Day Drivers") stacked in left column
   ctx.font = 'bold 8px Arial, sans-serif';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('70 Hour / 8 Day Drivers', bx + 4, recapY + hdrH / 2);
+  ctx.textBaseline = 'top';
+  ctx.fillText('70 Hour /',    r_bx + 4, recapY + 4);
+  ctx.fillText('8 Day',        r_bx + 4, recapY + 14);
+  ctx.fillText('Drivers',      r_bx + 4, recapY + 24);
+
+  // Horizontal line under letter row (only across data columns)
+  hLine(ctx, r_bx + titleColW, r_bx + r_bW, recapY + letterH, 0.8);
+  // Horizontal line under description row
+  hLine(ctx, r_bx + titleColW, r_bx + r_bW, recapY + letterH + r_descH, 0.8);
 
   const totalOnDuty = log.driving_hours + log.on_duty_not_driving_hours;
   const recapCols = [
@@ -406,36 +413,36 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
     },
     {
       lbl: 'C.',
-      desc: ['Total hours on duty', 'last 7 days incl. today.'],
+      desc: ['Total hrs on duty', 'last 7 days incl. today.'],
       val: '—',
     },
   ];
 
   recapCols.forEach((col, i) => {
-    const cx = bx + i * cW;
+    const cx = r_bx + titleColW + i * dataColW;
 
-    // Vertical separator (skip before first column)
-    if (i > 0) vLine(ctx, cx, recapY, recapY + bH, 0.8);
+    // Vertical separator between data columns
+    if (i > 0) vLine(ctx, cx, recapY, recapY + r_bH, 0.8);
 
-    // Column letter in header
-    ctx.font = 'bold 8.5px Arial, sans-serif';
+    // Column letter — centred in letter row
+    ctx.font = 'bold 9px Arial, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(col.lbl, cx + cW / 2, recapY + hdrH / 2);
+    ctx.fillText(col.lbl, cx + dataColW / 2, recapY + letterH / 2);
 
     // Description lines
     ctx.font = '7px Arial, sans-serif';
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
     col.desc.forEach((line, li) => {
-      ctx.fillText(line, cx + 4, recapY + hdrH + 4 + li * 11);
+      ctx.fillText(line, cx + 4, recapY + letterH + 3 + li * 12);
     });
 
-    // Value (bold, centred in value row)
-    ctx.font = 'bold 10px Arial, sans-serif';
+    // Value — bold, centred in value row
+    ctx.font = 'bold 11px Arial, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(col.val, cx + cW / 2, recapY + hdrH + descH + valH / 2);
+    ctx.fillText(col.val, cx + dataColW / 2, recapY + letterH + r_descH + r_valH / 2);
   });
 
   ctx.textAlign = 'left';
@@ -445,7 +452,7 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
   ctx.font = 'italic 7px Arial, sans-serif';
   ctx.fillText(
     '*If you took 34 consecutive hours off duty you have 60/70 hours available.',
-    bx + bW + 12, recapY + 4,
+    r_bx + r_bW + 12, recapY + 4,
   );
 }
 
