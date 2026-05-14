@@ -349,56 +349,104 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
 
   // ── RECAP SECTION ─────────────────────────────────────────────────────
   const recapY = REMARKS_Y + 90;
+
+  // "Recap:" label + instruction, left of the box
   ctx.font = 'bold 9px Arial, sans-serif';
+  ctx.fillStyle = '#000';
+  ctx.textBaseline = 'top';
   ctx.fillText('Recap:', 4, recapY);
-  ctx.font = '7.5px Arial, sans-serif';
-  ctx.fillText('Complete at end of day', 4, recapY + 12);
+  ctx.font = '7px Arial, sans-serif';
+  ctx.fillText('Complete at', 4, recapY + 13);
+  ctx.fillText('end of day', 4, recapY + 22);
 
-  // 70-hour recap box
-  const box70X = 80;
-  const box70W = 220;
-  const box70H = 74;
-  rect(ctx, box70X, recapY, box70W, box70H, 1);
+  // ── 70-Hour box layout ──────────────────────────────────────────────
+  // Structure:
+  //  [  left label col (80px)  |  col A (80px)  |  col B (80px)  |  col C (80px)  ]
+  //  Row 0 (header, 18px):  "70 Hour / 8 Day"  |  "A."  |  "B."  |  "C."
+  //  Row 1 (desc, 30px):    description text inside left label col spans — descriptions under each letter
+  //  Row 2 (value, 22px):   blank             |  value |  value |  value
 
+  const bx    = 72;   // box left edge
+  const lbW   = 0;    // no separate left-label column — title spans full width in header
+  const cW    = 80;   // each of the 3 data columns
+  const bW    = lbW + cW * 3;  // total box width = 240
+  const hdrH  = 18;   // header row height
+  const descH = 36;   // description row height
+  const valH  = 22;   // value row height
+  const bH    = hdrH + descH + valH;
+
+  rect(ctx, bx, recapY, bW, bH, 1);
+
+  // Header row background tint
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fillRect(bx + 1, recapY + 1, bW - 2, hdrH - 1);
+  ctx.fillStyle = '#000';
+
+  // Header divider
+  hLine(ctx, bx, bx + bW, recapY + hdrH, 0.8);
+
+  // Description / value row divider
+  hLine(ctx, bx, bx + bW, recapY + hdrH + descH, 0.8);
+
+  // Header title (left portion, before first column divider)
   ctx.font = 'bold 8px Arial, sans-serif';
-  ctx.fillText('70 Hour / 8 Day Drivers', box70X + 4, recapY + 4);
-
-  const colW = 56;
-  const colLabels = ['A.', 'B.', 'C.'];
-  colLabels.forEach((lbl, i) => {
-    const cx = box70X + 56 + i * colW;
-    vLine(ctx, cx, recapY, recapY + box70H, 0.8);
-    ctx.font = 'bold 8px Arial, sans-serif';
-    ctx.fillText(lbl, cx + 4, recapY + 4);
-  });
+  ctx.textBaseline = 'middle';
+  ctx.fillText('70 Hour / 8 Day Drivers', bx + 4, recapY + hdrH / 2);
 
   const totalOnDuty = log.driving_hours + log.on_duty_not_driving_hours;
-  const recapVals = [
-    totalOnDuty.toFixed(2),
-    Math.max(0, 70 - totalOnDuty).toFixed(2),
-    '—',
+  const recapCols = [
+    {
+      lbl: 'A.',
+      desc: ['Total hours on duty', 'today (lines 3 & 4).'],
+      val: totalOnDuty.toFixed(2),
+    },
+    {
+      lbl: 'B.',
+      desc: ['Hours available', 'tomorrow (70 hr – A).'],
+      val: Math.max(0, 70 - totalOnDuty).toFixed(2),
+    },
+    {
+      lbl: 'C.',
+      desc: ['Total hours on duty', 'last 7 days incl. today.'],
+      val: '—',
+    },
   ];
-  ctx.font = '8px Arial, sans-serif';
-  colLabels.forEach((_, i) => {
-    const cx = box70X + 56 + i * colW;
-    ctx.fillText(recapVals[i], cx + 4, recapY + 52);
+
+  recapCols.forEach((col, i) => {
+    const cx = bx + i * cW;
+
+    // Vertical separator (skip before first column)
+    if (i > 0) vLine(ctx, cx, recapY, recapY + bH, 0.8);
+
+    // Column letter in header
+    ctx.font = 'bold 8.5px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(col.lbl, cx + cW / 2, recapY + hdrH / 2);
+
+    // Description lines
+    ctx.font = '7px Arial, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    col.desc.forEach((line, li) => {
+      ctx.fillText(line, cx + 4, recapY + hdrH + 4 + li * 11);
+    });
+
+    // Value (bold, centred in value row)
+    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(col.val, cx + cW / 2, recapY + hdrH + descH + valH / 2);
   });
 
-  // Column description text
-  ctx.font = '7px Arial, sans-serif';
-  const descLines = [
-    'A. Total hrs on duty today (lines 3 & 4).',
-    'B. Hrs available tomorrow (70 hr – A).',
-    'C. Total hrs on duty last 7 days incl. today.',
-  ];
-  descLines.forEach((d, i) => {
-    ctx.fillText(d, box70X + 4, recapY + 26 + i * 10);
-  });
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
 
+  // Asterisk note to the right of the recap box
   ctx.font = 'italic 7px Arial, sans-serif';
   ctx.fillText(
     '*If you took 34 consecutive hours off duty you have 60/70 hours available.',
-    W - 380, recapY + 4,
+    bx + bW + 12, recapY + 4,
   );
 }
 
