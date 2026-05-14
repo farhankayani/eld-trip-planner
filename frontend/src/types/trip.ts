@@ -18,6 +18,9 @@ export interface DailyLog {
   miles_today: number;
   starting_location: string;
   ending_location: string;
+  shipper: string;
+  commodity: string;
+  load_no: string;
   timeline_entries: TimelineEntry[];
 }
 

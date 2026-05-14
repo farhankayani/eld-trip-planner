@@ -7,10 +7,10 @@ interface Props {
 
 // ── Logical canvas dimensions (what we draw into) ──────────────────────────
 const W = 1100;
-const H = 680;
+const H = 710;
 
 // ── Header / info area ─────────────────────────────────────────────────────
-const INFO_H = 108;
+const INFO_H = 134;  // extra row for Shipper / Commodity / Load No.
 
 // ── Grid layout ───────────────────────────────────────────────────────────
 const LABEL_W = 160;          // left label column width
@@ -117,6 +117,26 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
   ctx.fillText('Home Terminal Address', 440, bY2 + 2);
 
   hLine(ctx, 0, W, bY2 + bH + 2, 0.6);
+
+  // ── INFO BOXES ROW 3: Shipper / Commodity / Load No. ─────────────────
+  const bY3 = bY2 + bH + 4;
+  const loadW = 120;
+  const shipW = (W - loadW - 18) / 2;
+  rect(ctx, 6,              bY3, shipW,  bH);
+  rect(ctx, 12 + shipW,     bY3, shipW,  bH);
+  rect(ctx, 18 + shipW * 2, bY3, loadW,  bH);
+
+  ctx.font = '7.5px Arial, sans-serif';
+  ctx.fillText('Shipper and Address',           8,              bY3 + 2);
+  ctx.fillText('Commodity',                     14 + shipW,     bY3 + 2);
+  ctx.fillText('Load No.',                      20 + shipW * 2, bY3 + 2);
+
+  ctx.font = '10px Arial, sans-serif';
+  ctx.fillText(log.shipper   || '', 8,              bY3 + 13);
+  ctx.fillText(log.commodity || '', 14 + shipW,     bY3 + 13);
+  ctx.fillText(log.load_no   || '', 20 + shipW * 2, bY3 + 13);
+
+  hLine(ctx, 0, W, bY3 + bH + 2, 0.6);
 
   // ── HOUR LABELS ABOVE GRID ────────────────────────────────────────────
   const lblY = GRID_Y - 24;

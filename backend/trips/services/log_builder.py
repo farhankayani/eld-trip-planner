@@ -73,6 +73,9 @@ def build_daily_logs(segments: list) -> list:
             "miles_today": round(day_miles[log_date], 2),
             "starting_location": locs.get("start", ""),
             "ending_location": locs.get("end", ""),
+            "shipper": "",
+            "commodity": "",
+            "load_no": "",
             "timeline_entries": [
                 {
                     "status": e["status"],
