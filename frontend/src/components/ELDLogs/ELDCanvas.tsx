@@ -5,27 +5,27 @@ interface Props {
   log: DailyLog;
 }
 
-// Canvas logical dimensions
-const W = 900;
-const H = 620;
+// ── Logical canvas dimensions (what we draw into) ──────────────────────────
+const W = 1100;
+const H = 680;
 
-// Header / info box area
-const INFO_H = 110;
+// ── Header / info area ─────────────────────────────────────────────────────
+const INFO_H = 108;
 
-// Grid area
-const LABEL_X = 0;
-const LABEL_W = 148;
+// ── Grid layout ───────────────────────────────────────────────────────────
+const LABEL_W = 160;          // left label column width
+const TOTAL_W = 60;           // right "Total Hours" column width
 const GRID_X = LABEL_W;
-const GRID_RIGHT_MARGIN = 52; // space for "Total Hours" column
-const GRID_W = W - LABEL_W - GRID_RIGHT_MARGIN;
-const GRID_Y = INFO_H + 36; // room for hour labels above grid
-const ROW_H = 38;
+const GRID_W = W - LABEL_W - TOTAL_W;
+const GRID_Y = INFO_H + 42;  // leave room for hour labels above
+const ROW_H = 44;
 const GRID_H = ROW_H * 4;
 const HR_W = GRID_W / 24;
 
-// Remarks / recap below grid
-const REMARKS_Y = GRID_Y + GRID_H + 14;
+// ── Sections below grid ────────────────────────────────────────────────────
+const REMARKS_Y = GRID_Y + GRID_H + 16;
 
+// ── Status → row index ────────────────────────────────────────────────────
 const STATUS_ROW: Record<DutyStatus, number> = {
   OFF: 0,
   SLEEPER: 1,
@@ -34,14 +34,377 @@ const STATUS_ROW: Record<DutyStatus, number> = {
 };
 
 const ROW_LABELS = [
-  '1. Off Duty',
-  '2. Sleeper\n   Berth',
-  '3. Driving',
-  '4. On Duty\n   (Not Driving)',
+  ['1. Off Duty'],
+  ['2. Sleeper', '   Berth'],
+  ['3. Driving'],
+  ['4. On Duty', '   (Not Driving)'],
 ];
 
+// ── Draw the full ELD form onto `ctx` ─────────────────────────────────────
+function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
+  // Background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── TITLE / DATE ROW ──────────────────────────────────────────────────
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 14px Arial, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText("Driver's Daily Log", 8, 6);
+
+  ctx.font = '9px Arial, sans-serif';
+  ctx.fillText('(24 hours)', 8, 23);
+
+  const dateObj = new Date(log.log_date + 'T12:00:00');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day   = String(dateObj.getDate()).padStart(2, '0');
+  const year  = String(dateObj.getFullYear());
+
+  ctx.font = '11px Arial, sans-serif';
+  ctx.fillText(`${month}  /  ${day}  /  ${year}`, 230, 6);
+  ctx.font = '8px Arial, sans-serif';
+  ctx.fillText('(month)', 228, 20);
+  ctx.fillText('(day)', 263, 20);
+  ctx.fillText('(year)', 296, 20);
+
+  ctx.font = '8px Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('Original – File at home terminal.', W - 4, 6);
+  ctx.fillText('Duplicate – Driver retains in his/her possession for 8 days.', W - 4, 17);
+  ctx.textAlign = 'left';
+
+  hLine(ctx, 0, W, 32, 1);
+
+  // ── FROM / TO ─────────────────────────────────────────────────────────
+  ctx.font = 'bold 9px Arial, sans-serif';
+  ctx.fillText('From:', 8, 36);
+  ctx.font = '10px Arial, sans-serif';
+  ctx.fillText(log.starting_location || '', 44, 36);
+
+  ctx.font = 'bold 9px Arial, sans-serif';
+  ctx.fillText('To:', W / 2 + 4, 36);
+  ctx.font = '10px Arial, sans-serif';
+  ctx.fillText(log.ending_location || '', W / 2 + 22, 36);
+
+  hLine(ctx, 0, W, 50, 0.8);
+
+  // ── INFO BOXES ROW 1 ─────────────────────────────────────────────────
+  const bY1 = 52, bH = 24;
+  rect(ctx, 6,   bY1, 110, bH);
+  rect(ctx, 122, bY1, 110, bH);
+  rect(ctx, 238, bY1, W - 244, bH);
+
+  ctx.font = '7.5px Arial, sans-serif';
+  ctx.fillText('Total Miles Driving Today',     8,   bY1 + 2);
+  ctx.fillText('Total Mileage Today',           124, bY1 + 2);
+  ctx.fillText('Name of Carrier or Carriers',   240, bY1 + 2);
+
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.fillText(String(Math.round(log.miles_today)), 45, bY1 + 12);
+
+  hLine(ctx, 0, W, bY1 + bH + 2, 0.6);
+
+  // ── INFO BOXES ROW 2 ─────────────────────────────────────────────────
+  const bY2 = bY1 + bH + 4;
+  rect(ctx, 6,   bY2, 220, bH);
+  rect(ctx, 232, bY2, 200, bH);
+  rect(ctx, 438, bY2, W - 444, bH);
+
+  ctx.font = '7.5px Arial, sans-serif';
+  ctx.fillText('Truck/Tractor and Trailer Numbers or License Plate(s)/State', 8,   bY2 + 2);
+  ctx.fillText('Main Office Address',   234, bY2 + 2);
+  ctx.fillText('Home Terminal Address', 440, bY2 + 2);
+
+  hLine(ctx, 0, W, bY2 + bH + 2, 0.6);
+
+  // ── HOUR LABELS ABOVE GRID ────────────────────────────────────────────
+  const lblY = GRID_Y - 24;
+
+  ctx.font = 'bold 7.5px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Mid-',  GRID_X,              lblY - 8);
+  ctx.fillText('night', GRID_X,              lblY);
+  ctx.fillText('Noon',  GRID_X + 12 * HR_W, lblY - 4);
+  ctx.fillText('Mid-',  GRID_X + 24 * HR_W, lblY - 8);
+  ctx.fillText('night', GRID_X + 24 * HR_W, lblY);
+
+  // AM hours 1-11
+  ctx.font = '9px Arial, sans-serif';
+  for (let h = 1; h <= 11; h++) {
+    ctx.fillText(String(h), GRID_X + h * HR_W, lblY);
+  }
+  // PM hours 1-11
+  for (let h = 1; h <= 11; h++) {
+    ctx.fillText(String(h), GRID_X + (12 + h) * HR_W, lblY);
+  }
+
+  // "Total Hours" header
+  ctx.font = 'bold 8px Arial, sans-serif';
+  ctx.fillText('Total',  GRID_X + GRID_W + TOTAL_W / 2, GRID_Y - 18);
+  ctx.fillText('Hours',  GRID_X + GRID_W + TOTAL_W / 2, GRID_Y - 8);
+  ctx.textAlign = 'left';
+
+  // ── GRID BACKGROUND ───────────────────────────────────────────────────
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(GRID_X, GRID_Y, GRID_W, GRID_H);
+
+  // Shade alternate half-hour columns lightly for readability
+  ctx.fillStyle = '#f8f8f8';
+  for (let h = 0; h < 24; h++) {
+    if (h % 2 === 1) {
+      ctx.fillRect(GRID_X + h * HR_W, GRID_Y, HR_W, GRID_H);
+    }
+  }
+
+  // ── VERTICAL HOUR LINES ───────────────────────────────────────────────
+  for (let h = 0; h <= 24; h++) {
+    const x = GRID_X + h * HR_W;
+    const isMajor = h % 6 === 0;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = isMajor ? 1.5 : 0.6;
+    vLine(ctx, x, GRID_Y, GRID_Y + GRID_H);
+
+    // Quarter-hour tick marks inside each row
+    if (h < 24) {
+      for (let q = 1; q <= 3; q++) {
+        const qx = x + (q / 4) * HR_W;
+        const tickH = q === 2 ? 12 : 7;
+        ctx.lineWidth = 0.4;
+        ctx.strokeStyle = '#888';
+        for (let row = 0; row < 4; row++) {
+          const ry = GRID_Y + row * ROW_H;
+          // top tick
+          ctx.beginPath(); ctx.moveTo(qx, ry); ctx.lineTo(qx, ry + tickH); ctx.stroke();
+          // bottom tick
+          ctx.beginPath(); ctx.moveTo(qx, ry + ROW_H); ctx.lineTo(qx, ry + ROW_H - tickH); ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ── HORIZONTAL ROW DIVIDERS ───────────────────────────────────────────
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 0.8;
+  for (let row = 0; row <= 4; row++) {
+    const y = GRID_Y + row * ROW_H;
+    hLine(ctx, GRID_X, GRID_X + GRID_W, y, row === 0 || row === 4 ? 1.2 : 0.8);
+  }
+
+  // ── STATUS BARS ───────────────────────────────────────────────────────
+  // Draw filled black band at vertical center of each status row,
+  // matching the real paper ELD form style.
+  const BAR_H = 6; // thickness of the status band
+
+  const sorted = [...log.timeline_entries].sort((a, b) => a.start_hour - b.start_hour);
+
+  for (const entry of sorted) {
+    const row = STATUS_ROW[entry.status as DutyStatus];
+    const x1  = GRID_X + entry.start_hour * HR_W;
+    const x2  = GRID_X + entry.end_hour   * HR_W;
+    const midY = GRID_Y + row * ROW_H + ROW_H / 2;
+
+    // Filled status bar
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x1, midY - BAR_H / 2, x2 - x1, BAR_H);
+
+    // Left vertical edge (full row height)
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    vLine(ctx, x1, GRID_Y + row * ROW_H, GRID_Y + (row + 1) * ROW_H);
+
+    // Right vertical edge (full row height)
+    vLine(ctx, x2, GRID_Y + row * ROW_H, GRID_Y + (row + 1) * ROW_H);
+  }
+
+  // Vertical transition connectors between consecutive entries
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const cur = sorted[i];
+    const nxt = sorted[i + 1];
+    if (Math.abs(cur.end_hour - nxt.start_hour) < 0.02) {
+      const rowA = STATUS_ROW[cur.status as DutyStatus];
+      const rowB = STATUS_ROW[nxt.status as DutyStatus];
+      if (rowA !== rowB) {
+        const x  = GRID_X + cur.end_hour * HR_W;
+        const y1 = GRID_Y + rowA * ROW_H + ROW_H / 2;
+        const y2 = GRID_Y + rowB * ROW_H + ROW_H / 2;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y1);
+        ctx.lineTo(x, y2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ── ROW LABELS (left column) ──────────────────────────────────────────
+  rect(ctx, 0, GRID_Y, LABEL_W, GRID_H, 1.2);
+
+  ctx.fillStyle = '#000';
+  ctx.textBaseline = 'middle';
+  ctx.font = '9.5px Arial, sans-serif';
+  for (let row = 0; row < 4; row++) {
+    const cy = GRID_Y + row * ROW_H + ROW_H / 2;
+    const lines = ROW_LABELS[row];
+    if (lines.length === 1) {
+      ctx.fillText(lines[0], 6, cy);
+    } else {
+      ctx.fillText(lines[0], 6, cy - 7);
+      ctx.fillText(lines[1], 6, cy + 7);
+    }
+    if (row > 0) {
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 0.8;
+      hLine(ctx, 0, LABEL_W, GRID_Y + row * ROW_H, 0.8);
+    }
+  }
+
+  // ── TOTAL HOURS COLUMN (right) ─────────────────────────────────────────
+  const totX = GRID_X + GRID_W;
+  rect(ctx, totX, GRID_Y, TOTAL_W, GRID_H, 1.2);
+  for (let row = 1; row < 4; row++) {
+    hLine(ctx, totX, totX + TOTAL_W, GRID_Y + row * ROW_H, 0.8);
+  }
+
+  const totals = [
+    log.off_duty_hours,
+    log.sleeper_hours,
+    log.driving_hours,
+    log.on_duty_not_driving_hours,
+  ];
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px Arial, sans-serif';
+  ctx.fillStyle = '#000';
+  for (let row = 0; row < 4; row++) {
+    ctx.fillText(
+      totals[row].toFixed(2),
+      totX + TOTAL_W / 2,
+      GRID_Y + row * ROW_H + ROW_H / 2,
+    );
+  }
+  ctx.textAlign = 'left';
+
+  // ── OUTER GRID BORDER ─────────────────────────────────────────────────
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, GRID_Y, LABEL_W + GRID_W + TOTAL_W, GRID_H);
+
+  // ── REMARKS SECTION ───────────────────────────────────────────────────
+  ctx.textBaseline = 'top';
+  ctx.font = 'bold 9px Arial, sans-serif';
+  ctx.fillStyle = '#000';
+  ctx.fillText('Remarks', 8, REMARKS_Y);
+
+  rect(ctx, 0, REMARKS_Y + 14, W, 44, 0.8);
+
+  const remarkLines: string[] = [];
+  for (const entry of sorted) {
+    if (entry.notes) {
+      const hh = Math.floor(entry.start_hour);
+      const mm = Math.round((entry.start_hour % 1) * 60);
+      remarkLines.push(
+        `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} — ${entry.notes}` +
+        (entry.location ? ` at ${entry.location}` : ''),
+      );
+    }
+  }
+  if (remarkLines.length === 0) {
+    remarkLines.push(`Driving from ${log.starting_location} to ${log.ending_location}`);
+  }
+  ctx.font = '8.5px Arial, sans-serif';
+  remarkLines.slice(0, 3).forEach((r, i) => {
+    ctx.fillText(r, 6, REMARKS_Y + 17 + i * 14);
+  });
+
+  ctx.font = 'italic 7.5px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    'Enter name of place you reported and where released from work and when and where each change of duty occurred.',
+    W / 2, REMARKS_Y + 62,
+  );
+  ctx.fillText('Use time standard of home terminal.', W / 2, REMARKS_Y + 73);
+  ctx.textAlign = 'left';
+
+  // ── RECAP SECTION ─────────────────────────────────────────────────────
+  const recapY = REMARKS_Y + 90;
+  ctx.font = 'bold 9px Arial, sans-serif';
+  ctx.fillText('Recap:', 4, recapY);
+  ctx.font = '7.5px Arial, sans-serif';
+  ctx.fillText('Complete at end of day', 4, recapY + 12);
+
+  // 70-hour recap box
+  const box70X = 80;
+  const box70W = 220;
+  const box70H = 74;
+  rect(ctx, box70X, recapY, box70W, box70H, 1);
+
+  ctx.font = 'bold 8px Arial, sans-serif';
+  ctx.fillText('70 Hour / 8 Day Drivers', box70X + 4, recapY + 4);
+
+  const colW = 56;
+  const colLabels = ['A.', 'B.', 'C.'];
+  colLabels.forEach((lbl, i) => {
+    const cx = box70X + 56 + i * colW;
+    vLine(ctx, cx, recapY, recapY + box70H, 0.8);
+    ctx.font = 'bold 8px Arial, sans-serif';
+    ctx.fillText(lbl, cx + 4, recapY + 4);
+  });
+
+  const totalOnDuty = log.driving_hours + log.on_duty_not_driving_hours;
+  const recapVals = [
+    totalOnDuty.toFixed(2),
+    Math.max(0, 70 - totalOnDuty).toFixed(2),
+    '—',
+  ];
+  ctx.font = '8px Arial, sans-serif';
+  colLabels.forEach((_, i) => {
+    const cx = box70X + 56 + i * colW;
+    ctx.fillText(recapVals[i], cx + 4, recapY + 52);
+  });
+
+  // Column description text
+  ctx.font = '7px Arial, sans-serif';
+  const descLines = [
+    'A. Total hrs on duty today (lines 3 & 4).',
+    'B. Hrs available tomorrow (70 hr – A).',
+    'C. Total hrs on duty last 7 days incl. today.',
+  ];
+  descLines.forEach((d, i) => {
+    ctx.fillText(d, box70X + 4, recapY + 26 + i * 10);
+  });
+
+  ctx.font = 'italic 7px Arial, sans-serif';
+  ctx.fillText(
+    '*If you took 34 consecutive hours off duty you have 60/70 hours available.',
+    W - 380, recapY + 4,
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function hLine(ctx: CanvasRenderingContext2D, x1: number, x2: number, y: number, lw = 1) {
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+}
+
+function vLine(ctx: CanvasRenderingContext2D, x: number, y1: number, y2: number, lw = 1) {
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
+}
+
+function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, lw = 1) {
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = lw;
+  ctx.strokeRect(x, y, w, h);
+}
+
+// ── Component ─────────────────────────────────────────────────────────────
 export function ELDCanvas({ log }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,372 +413,35 @@ export function ELDCanvas({ log }: Props) {
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
+    canvas.width  = W * dpr;
     canvas.height = H * dpr;
-    canvas.style.width = `${W}px`;
+    // Keep logical CSS size fixed — download is always full resolution
+    canvas.style.width  = `${W}px`;
     canvas.style.height = `${H}px`;
     ctx.scale(dpr, dpr);
 
-    // ── White background ──────────────────────────────────────────────
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, W, H);
-
-    // ── HEADER ROW ────────────────────────────────────────────────────
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-
-    // Title
-    ctx.font = 'bold 13px Arial, sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#000';
-    ctx.fillText("Driver's Daily Log", 8, 6);
-
-    ctx.font = '9px Arial, sans-serif';
-    ctx.fillText('(24 hours)', 8, 22);
-
-    // Date line: ___ / ___ / ___   (month) (day) (year)
-    const dateObj = new Date(log.log_date + 'T12:00:00');
-    const month = String(dateObj.getMonth() + 1);
-    const day = String(dateObj.getDate());
-    const year = String(dateObj.getFullYear());
-
-    ctx.font = '10px Arial, sans-serif';
-    ctx.fillText(`${month}   /   ${day}   /   ${year}`, 220, 6);
-    ctx.font = '8px Arial, sans-serif';
-    ctx.fillText('(month)', 218, 18);
-    ctx.fillText('(day)', 250, 18);
-    ctx.fillText('(year)', 278, 18);
-
-    // Original / Duplicate notice
-    ctx.font = '8px Arial, sans-serif';
-    ctx.fillText('Original - File at home terminal.', 530, 6);
-    ctx.fillText('Duplicate - Driver retains in his/her possession for 8 days.', 530, 16);
-
-    // Horizontal line under title row
-    ctx.beginPath();
-    ctx.moveTo(0, 30);
-    ctx.lineTo(W, 30);
-    ctx.stroke();
-
-    // From / To
-    ctx.font = 'bold 9px Arial, sans-serif';
-    ctx.fillText('From:', 8, 34);
-    ctx.fillText('To:', 460, 34);
-
-    ctx.font = '10px Arial, sans-serif';
-    ctx.fillText(log.starting_location || '', 40, 34);
-    ctx.fillText(log.ending_location || '', 476, 34);
-
-    ctx.beginPath(); ctx.moveTo(0, 48); ctx.lineTo(W, 48); ctx.stroke();
-
-    // Info boxes row 1: Total Miles Driving Today | Total Mileage Today | Name of Carrier
-    const boxY1 = 50;
-    const boxH = 22;
-
-    // box borders
-    ctx.strokeRect(6, boxY1, 100, boxH);
-    ctx.strokeRect(112, boxY1, 100, boxH);
-    ctx.strokeRect(240, boxY1, W - 246, boxH);
-
-    ctx.font = '7.5px Arial, sans-serif';
-    ctx.fillText('Total Miles Driving Today', 8, boxY1 + 2);
-    ctx.fillText('Total Mileage Today', 114, boxY1 + 2);
-    ctx.fillText('Name of Carrier or Carriers', 242, boxY1 + 2);
-
-    ctx.font = 'bold 11px Arial, sans-serif';
-    ctx.fillText(String(Math.round(log.miles_today)), 40, boxY1 + 11);
-
-    ctx.beginPath(); ctx.moveTo(0, boxY1 + boxH + 2); ctx.lineTo(W, boxY1 + boxH + 2); ctx.stroke();
-
-    // Info boxes row 2: Truck/Tractor | License Plates | Main Office | Home Terminal
-    const boxY2 = 76;
-    ctx.strokeRect(6, boxY2, 210, boxH);
-    ctx.strokeRect(222, boxY2, 190, boxH);
-    ctx.strokeRect(418, boxY2, W - 424, boxH);
-
-    ctx.font = '7.5px Arial, sans-serif';
-    ctx.fillText('Truck/Tractor and Trailer Numbers or', 8, boxY2 + 2);
-    ctx.fillText("License Plate(s)/State (show each unit)", 8, boxY2 + 10);
-    ctx.fillText('Main Office Address', 224, boxY2 + 2);
-    ctx.fillText('Home Terminal Address', 420, boxY2 + 2);
-
-    ctx.beginPath(); ctx.moveTo(0, boxY2 + boxH + 2); ctx.lineTo(W, boxY2 + boxH + 2); ctx.stroke();
-
-    // ── HOUR LABELS ABOVE GRID ─────────────────────────────────────────
-    const labelRowY = GRID_Y - 20;
-
-    // "Mid-night" at start, "Noon" at 12, "Mid-night" at end
-    ctx.font = 'bold 7px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Mid-', GRID_X, labelRowY - 8);
-    ctx.fillText('night', GRID_X, labelRowY - 1);
-    ctx.fillText('Noon', GRID_X + 12 * HR_W, labelRowY - 4);
-    ctx.fillText('Mid-', GRID_X + 24 * HR_W, labelRowY - 8);
-    ctx.fillText('night', GRID_X + 24 * HR_W, labelRowY - 1);
-
-    // Hour numbers 1-11 AM, 1-11 PM
-    ctx.font = '8px Arial, sans-serif';
-    const hourNums = ['', '1','2','3','4','5','6','7','8','9','10','11','','1','2','3','4','5','6','7','8','9','10','11',''];
-    for (let h = 0; h < 25; h++) {
-      const x = GRID_X + h * HR_W;
-      if (hourNums[h]) ctx.fillText(hourNums[h], x, labelRowY);
-    }
-
-    // "Total Hours" header
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 7.5px Arial, sans-serif';
-    ctx.fillText('Total', GRID_X + GRID_W + GRID_RIGHT_MARGIN / 2, GRID_Y - 12);
-    ctx.fillText('Hours', GRID_X + GRID_W + GRID_RIGHT_MARGIN / 2, GRID_Y - 4);
-
-    ctx.textAlign = 'left';
-
-    // ── GRID ───────────────────────────────────────────────────────────
-
-    // Row backgrounds (white)
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(GRID_X, GRID_Y, GRID_W, GRID_H);
-
-    // Vertical hour lines with tick subdivisions
-    for (let h = 0; h <= 24; h++) {
-      const x = GRID_X + h * HR_W;
-      const isMajor = h % 6 === 0;
-      const isHour = true;
-
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = isMajor ? 1.2 : 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x, GRID_Y);
-      ctx.lineTo(x, GRID_Y + GRID_H);
-      ctx.stroke();
-
-      // Sub-tick marks (15-min intervals) — small ticks at top & bottom of each row
-      if (isHour && h < 24) {
-        for (let q = 1; q <= 3; q++) {
-          const qx = x + (q / 4) * HR_W;
-          ctx.lineWidth = 0.4;
-          ctx.strokeStyle = '#555';
-          for (let row = 0; row < 4; row++) {
-            const ry = GRID_Y + row * ROW_H;
-            const tickH = q === 2 ? 10 : 6; // half-hour tick taller
-            // top tick
-            ctx.beginPath(); ctx.moveTo(qx, ry); ctx.lineTo(qx, ry + tickH); ctx.stroke();
-            // bottom tick
-            ctx.beginPath(); ctx.moveTo(qx, ry + ROW_H); ctx.lineTo(qx, ry + ROW_H - tickH); ctx.stroke();
-          }
-        }
-      }
-    }
-
-    // Horizontal row dividers
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.8;
-    for (let row = 0; row <= 4; row++) {
-      const y = GRID_Y + row * ROW_H;
-      ctx.beginPath();
-      ctx.moveTo(GRID_X, y);
-      ctx.lineTo(GRID_X + GRID_W, y);
-      ctx.stroke();
-    }
-
-    // ── ROW LABELS (left side) ─────────────────────────────────────────
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.8;
-    // outer border for label area
-    ctx.strokeRect(LABEL_X, GRID_Y, LABEL_W, GRID_H);
-
-    ctx.font = '9px Arial, sans-serif';
-    ctx.fillStyle = '#000';
-    ctx.textBaseline = 'middle';
-    for (let row = 0; row < 4; row++) {
-      const cy = GRID_Y + row * ROW_H + ROW_H / 2;
-      const lines = ROW_LABELS[row].split('\n');
-      if (lines.length === 1) {
-        ctx.fillText(lines[0], LABEL_X + 4, cy);
-      } else {
-        ctx.fillText(lines[0], LABEL_X + 4, cy - 6);
-        ctx.fillText(lines[1], LABEL_X + 4, cy + 6);
-      }
-      // row divider in label area
-      if (row > 0) {
-        ctx.beginPath();
-        ctx.moveTo(LABEL_X, GRID_Y + row * ROW_H);
-        ctx.lineTo(LABEL_X + LABEL_W, GRID_Y + row * ROW_H);
-        ctx.stroke();
-      }
-    }
-
-    // ── TOTAL HOURS column (right of grid) ────────────────────────────
-    const totalsX = GRID_X + GRID_W;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(totalsX, GRID_Y, GRID_RIGHT_MARGIN, GRID_H);
-    for (let row = 1; row < 4; row++) {
-      ctx.beginPath();
-      ctx.moveTo(totalsX, GRID_Y + row * ROW_H);
-      ctx.lineTo(totalsX + GRID_RIGHT_MARGIN, GRID_Y + row * ROW_H);
-      ctx.stroke();
-    }
-
-    const totalsHours = [
-      log.off_duty_hours,
-      log.sleeper_hours,
-      log.driving_hours,
-      log.on_duty_not_driving_hours,
-    ];
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 10px Arial, sans-serif';
-    ctx.fillStyle = '#000';
-    for (let row = 0; row < 4; row++) {
-      ctx.fillText(
-        totalsHours[row].toFixed(2),
-        totalsX + GRID_RIGHT_MARGIN / 2,
-        GRID_Y + row * ROW_H + ROW_H / 2,
-      );
-    }
-    ctx.textAlign = 'left';
-
-    // ── STATUS BARS (solid black line through vertical center of row) ──
-    // Matches real ELD form: a horizontal line drawn through the midpoint
-    ctx.strokeStyle = '#000';
-    for (const entry of log.timeline_entries) {
-      const row = STATUS_ROW[entry.status as DutyStatus];
-      const x1 = GRID_X + entry.start_hour * HR_W;
-      const x2 = GRID_X + entry.end_hour * HR_W;
-      const midY = GRID_Y + row * ROW_H + ROW_H / 2;
-
-      // Horizontal status line
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x1, midY);
-      ctx.lineTo(x2, midY);
-      ctx.stroke();
-
-      // Vertical connectors at transitions (drop lines to next row or edge)
-      ctx.lineWidth = 1.5;
-      // left vertical line from top to bottom of row at start
-      ctx.beginPath();
-      ctx.moveTo(x1, GRID_Y + row * ROW_H);
-      ctx.lineTo(x1, GRID_Y + row * ROW_H + ROW_H);
-      ctx.stroke();
-      // right vertical line
-      ctx.beginPath();
-      ctx.moveTo(x2, GRID_Y + row * ROW_H);
-      ctx.lineTo(x2, GRID_Y + row * ROW_H + ROW_H);
-      ctx.stroke();
-    }
-
-    // Draw transition connectors between consecutive entries
-    const sorted = [...log.timeline_entries].sort((a, b) => a.start_hour - b.start_hour);
-    for (let i = 0; i + 1 < sorted.length; i++) {
-      const cur = sorted[i];
-      const nxt = sorted[i + 1];
-      if (Math.abs(cur.end_hour - nxt.start_hour) < 0.01) {
-        const rowA = STATUS_ROW[cur.status as DutyStatus];
-        const rowB = STATUS_ROW[nxt.status as DutyStatus];
-        if (rowA !== rowB) {
-          const x = GRID_X + cur.end_hour * HR_W;
-          const y1 = GRID_Y + rowA * ROW_H + ROW_H / 2;
-          const y2 = GRID_Y + rowB * ROW_H + ROW_H / 2;
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = '#000';
-          ctx.beginPath();
-          ctx.moveTo(x, y1);
-          ctx.lineTo(x, y2);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // ── OUTER GRID BORDER ──────────────────────────────────────────────
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(LABEL_X, GRID_Y, LABEL_W + GRID_W + GRID_RIGHT_MARGIN, GRID_H);
-
-    // ── REMARKS SECTION ────────────────────────────────────────────────
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 9px Arial, sans-serif';
-    ctx.fillStyle = '#000';
-    ctx.fillText('Remarks', 8, REMARKS_Y);
-
-    // Remarks lines box
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(0, REMARKS_Y + 12, W, 40);
-
-    ctx.font = '8.5px Arial, sans-serif';
-    const remarkLines: string[] = [];
-    for (const entry of log.timeline_entries) {
-      if (entry.notes) {
-        const hh = Math.floor(entry.start_hour);
-        const mm = Math.round((entry.start_hour % 1) * 60);
-        remarkLines.push(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')} — ${entry.notes}${entry.location ? ` at ${entry.location}` : ''}`);
-      }
-    }
-    if (remarkLines.length === 0) {
-      remarkLines.push(`Driving from ${log.starting_location} to ${log.ending_location}`);
-    }
-    remarkLines.slice(0, 3).forEach((r, i) => {
-      ctx.fillText(r, 6, REMARKS_Y + 15 + i * 13);
-    });
-
-    // "Enter name of place..." instruction
-    ctx.font = 'italic 8px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Enter name of place you reported and where released from work and when and where each change of duty occurred.', W / 2, REMARKS_Y + 56);
-    ctx.fillText('Use time standard of home terminal.', W / 2, REMARKS_Y + 66);
-    ctx.textAlign = 'left';
-
-    // ── RECAP SECTION ──────────────────────────────────────────────────
-    const recapY = REMARKS_Y + 80;
-    ctx.font = 'bold 8.5px Arial, sans-serif';
-    ctx.fillText('Recap:', 4, recapY);
-    ctx.font = '7.5px Arial, sans-serif';
-    ctx.fillText('Complete at', 4, recapY + 10);
-    ctx.fillText('end of day', 4, recapY + 19);
-
-    // 70-hour box
-    const box70X = 60;
-    ctx.strokeRect(box70X, recapY, 200, 72);
-    ctx.font = 'bold 8px Arial, sans-serif';
-    ctx.fillText('70 Hour/', box70X + 4, recapY + 2);
-    ctx.fillText('8 Day', box70X + 4, recapY + 11);
-    ctx.fillText('Drivers', box70X + 4, recapY + 20);
-
-    // columns A, B, C inside 70hr box
-    const colW70 = 52;
-    ['A.', 'B.', 'C.'].forEach((lbl, i) => {
-      const cx = box70X + 56 + i * colW70;
-      ctx.beginPath(); ctx.moveTo(cx, recapY); ctx.lineTo(cx, recapY + 72); ctx.stroke();
-      ctx.font = 'bold 8px Arial, sans-serif';
-      ctx.fillText(lbl, cx + 4, recapY + 2);
-    });
-
-    const recapRows = [
-      'A. Total hours on duty today.',
-      'B. Total hours on duty available tomorrow (70 hr. minus A).',
-      'C. Total hours on duty last 7 days including today.',
-    ];
-    ctx.font = '7px Arial, sans-serif';
-    const totalOnDuty = log.driving_hours + log.on_duty_not_driving_hours;
-    const recapVals70 = [
-      totalOnDuty.toFixed(2),
-      Math.max(0, 70 - totalOnDuty).toFixed(2),
-      '—',
-    ];
-    recapRows.forEach((_, i) => {
-      const cx = box70X + 56 + i * colW70;
-      ctx.fillText(recapVals70[i], cx + 4, recapY + 50);
-    });
-
-    ctx.font = '7px Arial, sans-serif';
-    ctx.fillText('On duty\nhours on\ntoday.\nTotal lines\n3 & 4'.replace(/\n/g, ' | '), box70X + 4, recapY + 35);
-
-    // Asterisk note
-    ctx.font = 'italic 7px Arial, sans-serif';
-    ctx.fillText('*If you took 34 consecutive hours off duty you have 60/70 hours available', W - 200, recapY + 2);
-
+    drawELD(ctx, log);
   }, [log]);
+
+  // Scale the canvas to fit the container width whenever the container resizes
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const canvas  = canvasRef.current;
+    if (!wrapper || !canvas) return;
+
+    const applyScale = () => {
+      const available = wrapper.clientWidth;
+      const scale = Math.min(1, available / W);
+      canvas.style.transform      = `scale(${scale})`;
+      canvas.style.transformOrigin = 'top left';
+      wrapper.style.height         = `${H * scale}px`;
+    };
+
+    applyScale();
+    const ro = new ResizeObserver(applyScale);
+    ro.observe(wrapper);
+    return () => ro.disconnect();
+  }, []);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -427,11 +453,18 @@ export function ELDCanvas({ log }: Props) {
   };
 
   return (
-    <div className="bg-white rounded border border-gray-300 overflow-hidden shadow">
-      <canvas ref={canvasRef} style={{ width: W, height: H, display: 'block' }} />
+    <div className="bg-white rounded border border-gray-300 shadow overflow-hidden">
+      {/* Preview wrapper: canvas is scaled to fit, no clipping */}
+      <div ref={wrapperRef} style={{ width: '100%', overflow: 'hidden', position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          style={{ display: 'block', width: W, height: H }}
+        />
+      </div>
+
       <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
         <span className="text-xs text-gray-500">
-          Day {log.day_index + 1} &nbsp;•&nbsp; {log.log_date} &nbsp;•&nbsp; {Math.round(log.miles_today)} miles
+          Day {log.day_index + 1}&nbsp;•&nbsp;{log.log_date}&nbsp;•&nbsp;{Math.round(log.miles_today)} miles
         </span>
         <button
           onClick={handleDownload}
