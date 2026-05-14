@@ -366,16 +366,15 @@ function drawELD(ctx: CanvasRenderingContext2D, log: DailyLog) {
   //  Row 1 (desc, 30px):    description text inside left label col spans — descriptions under each letter
   //  Row 2 (value, 22px):   blank             |  value |  value |  value
 
-  const bx    = 72;   // box left edge
-  const lbW   = 0;    // no separate left-label column — title spans full width in header
-  const cW    = 80;   // each of the 3 data columns
-  const bW    = lbW + cW * 3;  // total box width = 240
-  const hdrH  = 18;   // header row height
-  const descH = 36;   // description row height
-  const valH  = 22;   // value row height
-  const bH    = hdrH + descH + valH;
+  const bx      = 72;   // box left edge
+  const cW      = 80;   // each of the 3 data columns
+  const bW      = cW * 3;  // total box width = 240
+  const hdrH    = 18;   // header row height
+  const descH   = 36;   // description row height
+  const valH    = 22;   // value row height
+  const recap70H = hdrH + descH + valH;
 
-  rect(ctx, bx, recapY, bW, bH, 1);
+  rect(ctx, bx, recapY, bW, recap70H, 1);
 
   // Header row background tint
   ctx.fillStyle = '#f0f0f0';
